@@ -11,6 +11,13 @@
     button,input{font:inherit}button{cursor:pointer}.app{width:min(96vw,980px);padding:30px 16px 42px;text-align:center}
     .brand{display:inline-flex;align-items:center;gap:10px;font-size:clamp(24px,2.4vw,34px);font-weight:850;letter-spacing:-.02em;margin-bottom:12px;color:#152033}.brand::before{content:"";width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,var(--good),var(--accent));box-shadow:0 0 0 5px rgba(58,120,255,.12)}
     .subtitle{font-size:14px;color:var(--muted);margin:-2px 0 18px}
+    .login-gate{width:min(92vw,430px);background:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.9);border-radius:28px;padding:28px;box-shadow:var(--shadow);text-align:center}
+    .login-gate h1{margin:0 0 8px;font-size:30px}.login-gate p{margin:0 0 20px;color:var(--muted);font-size:14px;line-height:1.45}
+    .login-fields{display:grid;gap:12px}.login-fields input{width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:13px;background:#fff;outline:none}
+    .login-fields input:focus{border-color:#8fb1ff;box-shadow:0 0 0 4px rgba(58,120,255,.12)}
+    .login-error{min-height:20px;margin-top:10px;color:#d54b64;font-size:13px;font-weight:650}
+    .login-btn{border:0;border-radius:14px;padding:13px 18px;background:linear-gradient(135deg,#2155d6,#152033);color:#fff;font-weight:750;cursor:pointer}
+    .session-name{font-weight:800;color:#152033}.logout-btn{border:1px solid var(--line);background:#fff;color:#334057;border-radius:12px;padding:9px 13px;cursor:pointer}
     .userbar{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;margin:0 auto 14px;background:rgba(255,255,255,.68);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.75);border-radius:16px;padding:12px;max-width:540px;box-shadow:0 10px 24px rgba(31,49,79,.08)}
     .userbar input{width:240px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);outline:none}.userbar input:focus{border-color:#8fb1ff;box-shadow:0 0 0 4px rgba(58,120,255,.12)}
     .mini-btn,.start-btn,.check-btn,.cancel-btn,.continue-btn{border:0;border-radius:14px;padding:11px 16px;background:#16263b;color:#fff;box-shadow:0 8px 18px rgba(22,38,59,.18);font-weight:650;transition:transform .15s ease,box-shadow .15s ease,opacity .15s ease}.mini-btn:hover,.start-btn:hover,.check-btn:hover,.cancel-btn:hover,.continue-btn:hover{transform:translateY(-1px)}
@@ -29,11 +36,23 @@
   </style>
 </head>
 <body>
-  <main class="app">
+  <section id="loginGate" class="login-gate">
+    <div class="brand">John Mental Math</div>
+    <h1>Acceso</h1>
+    <p>Escribe únicamente tu primer nombre y el código de acceso que te fue asignado.</p>
+    <div class="login-fields">
+      <input id="loginName" maxlength="24" placeholder="Primer nombre" autocomplete="given-name" />
+      <input id="loginCode" maxlength="10" placeholder="Código de acceso" autocomplete="off" />
+      <button id="loginBtn" class="login-btn">Entrar</button>
+    </div>
+    <div id="loginError" class="login-error"></div>
+  </section>
+
+  <main id="appMain" class="app hidden">
     <div class="brand">John Mental Math</div>
     <div class="subtitle">Entrenamiento de agilidad matemática · récord individual por alumno</div>
-    <div class="userbar"><input id="username" maxlength="28" placeholder="Nombre del alumno" autocomplete="off" /><button id="saveUser" class="mini-btn">Usar usuario</button></div>
-    <div id="record" class="record">Escribe un usuario para guardar su récord.</div>
+    <div class="userbar"><span>Sesión: <span id="sessionName" class="session-name"></span></span><button id="logoutBtn" class="logout-btn">Cerrar sesión</button></div>
+    <div id="record" class="record"></div>
     <div class="arena-wrap"><section id="arena" class="arena" aria-label="Desafío matemático">
       <div id="countdownSurface" class="countdown-surface hidden"></div>
       <div id="startScreen" class="inside"><div class="title-badge">Modo entrenamiento</div><div class="title">Resuelve la mayor cantidad posible de sumas, restas y multiplicaciones en 60 segundos.</div><button id="startBtn" class="start-btn">Iniciar ronda</button></div>
@@ -47,31 +66,204 @@
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
-  const arena=$('arena'),username=$('username'),record=$('record'),startScreen=$('startScreen'),countdownScreen=$('countdownScreen'),countdownSurface=$('countdownSurface'),gameScreen=$('gameScreen'),resultScreen=$('resultScreen'),clock=$('clock'),barFill=$('barFill'),scoreLine=$('scoreLine'),answer=$('answer'),hint=$('hint'),opEl=$('op'),n1El=$('n1'),n2El=$('n2');
-  let activeUser=localStorage.getItem('jmm.activeUser')||localStorage.getItem('sj.activeUser')||'',countdownTimer=null,gameTimer=null,remaining=60,startTs=0,lastAttemptTs=0,correct=0,attempts=0,errors=0,score=0,responseTimes=[],problem=null;
-  function records(){try{return JSON.parse(localStorage.getItem('jmm.records')||localStorage.getItem('sj.records')||'{}')}catch{return{}}}
-  function saveRecords(v){localStorage.setItem('jmm.records',JSON.stringify(v))}
-  function bestFor(user){return records()[user]||null}
-  function setActiveUser(name){activeUser=name.trim();if(!activeUser)return;username.value=activeUser;localStorage.setItem('jmm.activeUser',activeUser);renderRecord()}
-  function renderRecord(){if(!activeUser){record.textContent='Escribe un usuario para guardar su récord.';return}const b=bestFor(activeUser);record.textContent=b?`${activeUser} · Mejor puntaje guardado: ${b.score} pts`:`${activeUser} · Aún sin récord`}
-  if(activeUser){username.value=activeUser;renderRecord()}
-  $('saveUser').addEventListener('click',()=>setActiveUser(username.value));username.addEventListener('keydown',e=>{if(e.key==='Enter')setActiveUser(username.value)});
-  function show(which){[startScreen,countdownScreen,gameScreen,resultScreen].forEach(x=>x.classList.add('hidden'));countdownSurface.classList.add('hidden');which.classList.remove('hidden');if(which===countdownScreen)countdownSurface.classList.remove('hidden')}
-  function timerColor(t){const ratio=Math.max(0,Math.min(1,t/60));const hue=15+ratio*205;return `hsl(${hue} 85% 56%)`}
-  function paintTimer(){const p=(remaining/60)*360,c=timerColor(remaining);arena.style.setProperty('--p',`${p}deg`);arena.style.setProperty('--timer',c);clock.style.color=c;clock.textContent=`${Math.ceil(remaining)}s`}
-  function updateScoreUI(){scoreLine.textContent=`Puntaje: ${correct}/${attempts}`;const pct=attempts===0?100:(correct/attempts)*100;barFill.style.width=`${Math.max(0,Math.min(100,pct))}%`}
+  const VALID_CODES = [
+    'JMM-LHEELX','JMM-F48ZUJ','JMM-W3G7RT','JMM-YHU9MF','JMM-8UEG33',
+    'JMM-BEH3MV','JMM-G3XZZH','JMM-VBT98S','JMM-WTAGY2','JMM-FZ24VW',
+    'JMM-K3LP43','JMM-YYAZD4','JMM-SAF26X','JMM-Y2JCEL','JMM-HEFNJ6',
+    'JMM-75L9ZZ','JMM-N8RBZK','JMM-S5C5KJ','JMM-4ZF5M9','JMM-GSDH2Y'
+  ];
+
+  const arena=$('arena'), record=$('record'), loginGate=$('loginGate'), appMain=$('appMain');
+  const loginName=$('loginName'), loginCode=$('loginCode'), loginError=$('loginError'), sessionName=$('sessionName');
+  const startScreen=$('startScreen'), countdownScreen=$('countdownScreen'), countdownSurface=$('countdownSurface'), gameScreen=$('gameScreen'), resultScreen=$('resultScreen');
+  const clock=$('clock'), barFill=$('barFill'), scoreLine=$('scoreLine'), answer=$('answer'), hint=$('hint'), opEl=$('op'), n1El=$('n1'), n2El=$('n2');
+
+  let session = loadSession();
+  let activeUser = session?.name || '';
+  let activeCode = session?.code || '';
+  let countdownTimer=null, gameTimer=null, remaining=60, startTs=0, lastAttemptTs=0;
+  let correct=0, attempts=0, errors=0, score=0, responseTimes=[], problem=null;
+
+  function loadSession(){
+    try{return JSON.parse(localStorage.getItem('jmm.session')||'null')}catch{return null}
+  }
+  function saveSession(name,code){
+    const value={name,code};
+    localStorage.setItem('jmm.session',JSON.stringify(value));
+    session=value; activeUser=name; activeCode=code;
+  }
+  function clearSession(){
+    localStorage.removeItem('jmm.session');
+    session=null; activeUser=''; activeCode='';
+  }
+  function normalizeName(value){
+    return value.trim().replace(/\s+/g,' ');
+  }
+  function validFirstName(name){
+    return name.length>=2 && !name.includes(' ');
+  }
+  function records(){
+    try{return JSON.parse(localStorage.getItem('jmm.recordsByCode')||'{}')}catch{return{}}
+  }
+  function saveRecords(v){localStorage.setItem('jmm.recordsByCode',JSON.stringify(v))}
+  function bestForCode(code){return records()[code]||null}
+  function renderRecord(){
+    sessionName.textContent=activeUser;
+    const b=bestForCode(activeCode);
+    record.textContent=b ? `${activeUser} · Mejor puntaje guardado: ${b.score} pts` : `${activeUser} · Aún sin récord`;
+  }
+  function enterApp(){
+    loginGate.classList.add('hidden');
+    appMain.classList.remove('hidden');
+    renderRecord();
+  }
+  function showLogin(){
+    appMain.classList.add('hidden');
+    loginGate.classList.remove('hidden');
+    loginName.value=''; loginCode.value=''; loginError.textContent='';
+    requestAnimationFrame(()=>loginName.focus());
+  }
+  function attemptLogin(){
+    const name=normalizeName(loginName.value);
+    const code=loginCode.value.trim().toUpperCase();
+    if(!validFirstName(name)){
+      loginError.textContent='Escribe únicamente tu primer nombre.';
+      loginName.focus(); return;
+    }
+    if(!VALID_CODES.includes(code)){
+      loginError.textContent='Código de acceso no válido.';
+      loginCode.select(); return;
+    }
+    saveSession(name,code);
+    enterApp();
+  }
+
+  $('loginBtn').addEventListener('click',attemptLogin);
+  loginName.addEventListener('keydown',e=>{if(e.key==='Enter')loginCode.focus()});
+  loginCode.addEventListener('keydown',e=>{if(e.key==='Enter')attemptLogin()});
+  $('logoutBtn').addEventListener('click',()=>{
+    clearInterval(countdownTimer); clearInterval(gameTimer);
+    clearSession(); showLogin();
+  });
+
+  function show(which){
+    [startScreen,countdownScreen,gameScreen,resultScreen].forEach(x=>x.classList.add('hidden'));
+    countdownSurface.classList.add('hidden');
+    which.classList.remove('hidden');
+    if(which===countdownScreen)countdownSurface.classList.remove('hidden');
+  }
+  function timerColor(t){
+    const ratio=Math.max(0,Math.min(1,t/60));
+    const hue=15+ratio*205;
+    return `hsl(${hue} 85% 56%)`;
+  }
+  function paintTimer(){
+    const p=(remaining/60)*360,c=timerColor(remaining);
+    arena.style.setProperty('--p',`${p}deg`);
+    arena.style.setProperty('--timer',c);
+    clock.style.color=c;
+    clock.textContent=`${Math.ceil(remaining)}s`;
+  }
+  function updateScoreUI(){
+    scoreLine.textContent=`Puntaje: ${correct}/${attempts}`;
+    const pct=attempts===0?100:(correct/attempts)*100;
+    barFill.style.width=`${Math.max(0,Math.min(100,pct))}%`;
+  }
   const rand=(min,max)=>Math.floor(Math.random()*(max-min+1))+min;
-  function makeProblem(){const kind=['+','-','×'][rand(0,2)];let a,b,res;if(kind==='×'){a=rand(10,99);b=rand(10,99);res=a*b}else if(kind==='+'){a=rand(100,999);b=rand(10,99);res=a+b}else{a=rand(10,99);b=rand(0,9);res=a-b}return{kind,a,b,res}}
-  function loadProblem(){problem=makeProblem();opEl.textContent=problem.kind;n1El.textContent=problem.a;n2El.textContent=problem.b;answer.value='';answer.classList.remove('bad','good');hint.textContent='';lastAttemptTs=performance.now();requestAnimationFrame(()=>answer.focus())}
-  function resetRound(){remaining=60;correct=0;attempts=0;errors=0;score=0;responseTimes=[];arena.style.setProperty('--p','360deg');barFill.style.width='100%';updateScoreUI();paintTimer()}
-  function beginCountdown(){if(!activeUser){if(username.value.trim())setActiveUser(username.value);else{username.focus();record.textContent='Primero escribe el nombre del alumno.';return}}resetRound();show(countdownScreen);let n=5;$('countNumber').textContent=n;clearInterval(countdownTimer);countdownTimer=setInterval(()=>{n--;if(n<=0){clearInterval(countdownTimer);startGame()}else $('countNumber').textContent=n},1000)}
+  function makeProblem(){
+    const kind=['+','-','×'][rand(0,2)];
+    let a,b,res;
+    if(kind==='×'){a=rand(10,99);b=rand(10,99);res=a*b}
+    else if(kind==='+'){a=rand(100,999);b=rand(10,99);res=a+b}
+    else{a=rand(10,99);b=rand(0,9);res=a-b}
+    return{kind,a,b,res};
+  }
+  function loadProblem(){
+    problem=makeProblem();
+    opEl.textContent=problem.kind; n1El.textContent=problem.a; n2El.textContent=problem.b;
+    answer.value=''; answer.classList.remove('bad','good'); hint.textContent='';
+    lastAttemptTs=performance.now();
+    requestAnimationFrame(()=>answer.focus());
+  }
+  function resetRound(){
+    remaining=60;correct=0;attempts=0;errors=0;score=0;responseTimes=[];
+    arena.style.setProperty('--p','360deg'); barFill.style.width='100%'; updateScoreUI(); paintTimer();
+  }
+  function beginCountdown(){
+    resetRound(); show(countdownScreen);
+    let n=5; $('countNumber').textContent=n;
+    clearInterval(countdownTimer);
+    countdownTimer=setInterval(()=>{
+      n--;
+      if(n<=0){clearInterval(countdownTimer);startGame()}
+      else $('countNumber').textContent=n;
+    },1000);
+  }
   function cancelCountdown(){clearInterval(countdownTimer);show(startScreen);arena.style.setProperty('--p','360deg')}
-  function startGame(){show(gameScreen);resetRound();loadProblem();startTs=performance.now();clearInterval(gameTimer);gameTimer=setInterval(()=>{const elapsed=(performance.now()-startTs)/1000;remaining=Math.max(0,60-elapsed);paintTimer();if(remaining<=0)endGame()},60)}
-  function checkAnswer(){if(remaining<=0||!problem)return;const raw=answer.value.trim();if(raw==='')return;const val=Number(raw);attempts++;responseTimes.push((performance.now()-lastAttemptTs)/1000);if(val===problem.res){correct++;score++;answer.classList.remove('bad');answer.classList.add('good');hint.textContent='';updateScoreUI();setTimeout(()=>{if(remaining>0)loadProblem()},110)}else{errors++;score--;answer.classList.add('bad');answer.classList.remove('good');hint.textContent='Inténtalo otra vez';updateScoreUI();answer.select();lastAttemptTs=performance.now()}}
-  function resultObject(){const accuracy=attempts?Math.round((correct/attempts)*1000)/10:0,avg=responseTimes.length?responseTimes.reduce((a,b)=>a+b,0)/responseTimes.length:0;return{score,correct,attempts,errors,accuracy,avg:Number(avg.toFixed(2)),date:new Date().toISOString()}}
-  function isBetter(now,best){if(!best)return true;if(now.score!==best.score)return now.score>best.score;return now.correct>best.correct}
-  function endGame(){clearInterval(gameTimer);remaining=0;paintTimer();problem=null;answer.blur();const r=resultObject(),all=records(),prev=all[activeUser],newBest=isBetter(r,prev);if(newBest){all[activeUser]=r;saveRecords(all)}$('finalRatio').textContent=`${r.correct}/${r.attempts}`;$('statScore').textContent=r.score;$('statErrors').textContent=r.errors;$('statAccuracy').textContent=`${r.accuracy}%`;$('statExercises').textContent=r.correct;$('statAvg').textContent=`${r.avg.toFixed(2)} s`;$('bestTag').textContent=newBest?'★ Nuevo mejor resultado':'Mejor resultado conservado';show(resultScreen);renderRecord()}
-  $('startBtn').addEventListener('click',beginCountdown);$('cancelBtn').addEventListener('click',cancelCountdown);$('checkBtn').addEventListener('click',checkAnswer);answer.addEventListener('keydown',e=>{if(e.key==='Enter')checkAnswer()});$('continueBtn').addEventListener('click',()=>{arena.style.setProperty('--p','360deg');show(startScreen)});arena.style.setProperty('--p','360deg');
+  function startGame(){
+    show(gameScreen);resetRound();loadProblem();startTs=performance.now();clearInterval(gameTimer);
+    gameTimer=setInterval(()=>{
+      const elapsed=(performance.now()-startTs)/1000;
+      remaining=Math.max(0,60-elapsed);paintTimer();
+      if(remaining<=0)endGame();
+    },60);
+  }
+  function checkAnswer(){
+    if(remaining<=0||!problem)return;
+    const raw=answer.value.trim();
+    if(raw==='')return;
+    const val=Number(raw);
+    attempts++;
+    responseTimes.push((performance.now()-lastAttemptTs)/1000);
+    if(val===problem.res){
+      correct++;score++;
+      answer.classList.remove('bad');answer.classList.add('good');hint.textContent='';
+      updateScoreUI();
+      setTimeout(()=>{if(remaining>0)loadProblem()},110);
+    }else{
+      errors++;score--;
+      answer.classList.add('bad');answer.classList.remove('good');
+      hint.textContent='Inténtalo otra vez';
+      updateScoreUI();answer.select();lastAttemptTs=performance.now();
+    }
+  }
+  function resultObject(){
+    const accuracy=attempts?Math.round((correct/attempts)*1000)/10:0;
+    const avg=responseTimes.length?responseTimes.reduce((a,b)=>a+b,0)/responseTimes.length:0;
+    return{score,correct,attempts,errors,accuracy,avg:Number(avg.toFixed(2)),date:new Date().toISOString(),name:activeUser};
+  }
+  function isBetter(now,best){
+    if(!best)return true;
+    if(now.score!==best.score)return now.score>best.score;
+    return now.correct>best.correct;
+  }
+  function endGame(){
+    clearInterval(gameTimer);remaining=0;paintTimer();problem=null;answer.blur();
+    const r=resultObject(),all=records(),prev=all[activeCode],newBest=isBetter(r,prev);
+    if(newBest){all[activeCode]=r;saveRecords(all)}
+    $('finalRatio').textContent=`${r.correct}/${r.attempts}`;
+    $('statScore').textContent=r.score;
+    $('statErrors').textContent=r.errors;
+    $('statAccuracy').textContent=`${r.accuracy}%`;
+    $('statExercises').textContent=r.correct;
+    $('statAvg').textContent=`${r.avg.toFixed(2)} s`;
+    $('bestTag').textContent=newBest?'★ Nuevo mejor resultado':'Mejor resultado conservado';
+    show(resultScreen);renderRecord();
+  }
+
+  $('startBtn').addEventListener('click',beginCountdown);
+  $('cancelBtn').addEventListener('click',cancelCountdown);
+  $('checkBtn').addEventListener('click',checkAnswer);
+  answer.addEventListener('keydown',e=>{if(e.key==='Enter')checkAnswer()});
+  $('continueBtn').addEventListener('click',()=>{arena.style.setProperty('--p','360deg');show(startScreen)});
+  arena.style.setProperty('--p','360deg');
+
+  if(session && VALID_CODES.includes(session.code) && validFirstName(session.name)){
+    enterApp();
+  }else{
+    clearSession();
+    showLogin();
+  }
 })();
 </script>
 </body>
