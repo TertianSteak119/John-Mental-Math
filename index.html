@@ -73,6 +73,12 @@
     'JMM-75L9ZZ','JMM-N8RBZK','JMM-S5C5KJ','JMM-4ZF5M9','JMM-GSDH2Y'
   ];
 
+  const ASSIGNED_NAMES = {
+    'JMM-LHEELX': 'Santiago',
+    'JMM-F48ZUJ': 'José',
+    'JMM-W3G7RT': 'John'
+  };
+
   const arena=$('arena'), record=$('record'), loginGate=$('loginGate'), appMain=$('appMain');
   const loginName=$('loginName'), loginCode=$('loginCode'), loginError=$('loginError'), sessionName=$('sessionName');
   const startScreen=$('startScreen'), countdownScreen=$('countdownScreen'), countdownSurface=$('countdownSurface'), gameScreen=$('gameScreen'), resultScreen=$('resultScreen');
@@ -101,6 +107,9 @@
   }
   function validFirstName(name){
     return name.length>=2 && !name.includes(' ');
+  }
+  function normalizeForMatch(value){
+    return value.trim().toLocaleLowerCase('es-MX').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   }
   function records(){
     try{return JSON.parse(localStorage.getItem('jmm.recordsByCode')||'{}')}catch{return{}}
@@ -134,7 +143,12 @@
       loginError.textContent='Código de acceso no válido.';
       loginCode.select(); return;
     }
-    saveSession(name,code);
+    const assignedName = ASSIGNED_NAMES[code];
+    if(assignedName && normalizeForMatch(name) !== normalizeForMatch(assignedName)){
+      loginError.textContent='Este código no corresponde a ese nombre.';
+      loginName.select(); return;
+    }
+    saveSession(assignedName || name,code);
     enterApp();
   }
 
@@ -259,7 +273,16 @@
   arena.style.setProperty('--p','360deg');
 
   if(session && VALID_CODES.includes(session.code) && validFirstName(session.name)){
-    enterApp();
+    const assignedName = ASSIGNED_NAMES[session.code];
+    if(!assignedName || normalizeForMatch(session.name) === normalizeForMatch(assignedName)){
+      if(assignedName && session.name !== assignedName){
+        saveSession(assignedName,session.code);
+      }
+      enterApp();
+    }else{
+      clearSession();
+      showLogin();
+    }
   }else{
     clearSession();
     showLogin();
