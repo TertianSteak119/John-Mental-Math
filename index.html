@@ -77,7 +77,7 @@
     'JMM-LHEELX': 'Santiago',
     'JMM-F48ZUJ': 'José',
     'JMM-W3G7RT': 'John',
-    'JMM-YHU9MF': 'Sergio'
+    'JMM-YHU9MF': 'Sergio|Serch'
   };
 
   const arena=$('arena'), record=$('record'), loginGate=$('loginGate'), appMain=$('appMain');
@@ -145,11 +145,13 @@
       loginCode.select(); return;
     }
     const assignedName = ASSIGNED_NAMES[code];
-    if(assignedName && normalizeForMatch(name) !== normalizeForMatch(assignedName)){
+    const allowedNames = assignedName ? assignedName.split('|') : [];
+    const matchedName = allowedNames.find(n => normalizeForMatch(name) === normalizeForMatch(n));
+    if(assignedName && !matchedName){
       loginError.textContent='Este código no corresponde a ese nombre.';
       loginName.select(); return;
     }
-    saveSession(assignedName || name,code);
+    saveSession(matchedName || name,code);
     enterApp();
   }
 
@@ -275,9 +277,11 @@
 
   if(session && VALID_CODES.includes(session.code) && validFirstName(session.name)){
     const assignedName = ASSIGNED_NAMES[session.code];
-    if(!assignedName || normalizeForMatch(session.name) === normalizeForMatch(assignedName)){
-      if(assignedName && session.name !== assignedName){
-        saveSession(assignedName,session.code);
+    const allowedNames = assignedName ? assignedName.split('|') : [];
+    const matchedName = allowedNames.find(n => normalizeForMatch(session.name) === normalizeForMatch(n));
+    if(!assignedName || matchedName){
+      if(matchedName && session.name !== matchedName){
+        saveSession(matchedName,session.code);
       }
       enterApp();
     }else{
